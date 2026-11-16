@@ -66,7 +66,7 @@ console.log(extraction.status, extraction.claim_metadata);
 ```
 
 By default, the service expects the sibling `bpi_playwright_handoff_repo` directory
-and its `.venv-py312` environment. Override these locations with
+and its `.venv-py311` environment. Override these locations with
 `CLAIM_OCR_PROJECT_ROOT` and `CLAIM_OCR_PYTHON` when needed. The OCR dependencies
 and model files must already be installed in that Python environment. Results remain
 `needs_review` until checked against the source invoice; do not use OCR output as

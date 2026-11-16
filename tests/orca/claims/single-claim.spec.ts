@@ -3,14 +3,16 @@ import path from 'path';
 import { expect, test } from '@fixtures/api-fixtures';
 import { TabClaimOptions } from '@pages/orca/claim/tabs-claim-detail-section';
 import { OrcaScreenManager } from '@pages/page-managers/orca-page-manager';
-import { ClaimOcrService } from '@services/claim-ocr-service';
+import { runOrcaBpiCpuNotebook } from '@test-helpers/orca-bpi-cpu-notebook';
 import { downloadPdf } from '@utils/download-util';
 import { loginToOrca } from '@utils/login-orca-util';
 
 const claimId = '2431310';
 const claimAttachmentsFolder = 'claim-attachments';
 
-test('Orca > Download all attachments for a claim', { tag: ['@Regression', '@Orca', '@ClaimsTest'] }, async ({ page }) => {
+test('Orca > Download attachments and extract with notebook CPU pipeline', { tag: ['@Regression', '@Orca', '@ClaimsTest'] }, async ({ page }) => {
+    test.setTimeout(60 * 60_000);
+
     await test.step('Clear previous downloaded files and OCR output', async () => {
         const downloadDirectory = path.resolve('download', claimAttachmentsFolder);
         await mkdir(downloadDirectory, { recursive: true });
@@ -67,39 +69,16 @@ test('Orca > Download all attachments for a claim', { tag: ['@Regression', '@Orc
         }
     });
 
-    await test.step('Extract the downloaded document into JSON', async () => {
+    await test.step('Extract the downloaded document with the notebook CPU pipeline', async () => {
         const documentPath = path.join(
             path.resolve('download', claimAttachmentsFolder),
             `${claimId}-additional-claim-info.pdf`
         );
-        const outputPath = path.join(
-            path.dirname(documentPath),
-            `${claimId}-additional-claim-info.json`
-        );
         const documentBytes = await readFile(documentPath);
         expect(documentBytes.subarray(0, 1024).indexOf(Buffer.from('%PDF-'))).toBeGreaterThanOrEqual(0);
 
-        const result = await new ClaimOcrService().parseDocumentToJson(documentPath, outputPath);
-        const savedResult = JSON.parse(await readFile(outputPath, 'utf8'));
-        expect(savedResult).toEqual(result);
-        expect(result.validation.review_required).toBe(true);
-
-        const ruleOutputDirectory = path.join(
-            path.dirname(outputPath),
-            path.parse(outputPath).name
-        );
-        const metadata = JSON.parse(
-            await readFile(path.join(ruleOutputDirectory, 'claim_metadata.json'), 'utf8')
-        );
-        const petWiseItems = JSON.parse(
-            await readFile(path.join(ruleOutputDirectory, 'pet_wise_line_items.json'), 'utf8')
-        );
-        if ('invoices' in result) {
-            expect(metadata.invoices).toHaveLength(result.invoices.length);
-            expect(petWiseItems.invoices).toHaveLength(result.invoices.length);
-        } else {
-            expect(metadata.claim_metadata).toEqual(result.claim_metadata);
-            expect(petWiseItems.pets).toEqual(result.pets);
-        }
+        const extraction = await runOrcaBpiCpuNotebook(documentPath);
+        expect(extraction.metadata.total_documents).toBeGreaterThan(0);
+        expect(extraction.metadata.documents).toHaveLength(extraction.metadata.total_documents);
     });
 });

@@ -77,7 +77,7 @@ export class ClaimOcrService {
             ?? (process.env.CLAIM_OCR_PYTHON || undefined)
             ?? path.join(
                 this.extractionProjectRoot,
-                '.venv-py312',
+                '.venv-py311',
                 process.platform === 'win32' ? 'Scripts' : 'bin',
                 process.platform === 'win32' ? 'python.exe' : 'python'
             );

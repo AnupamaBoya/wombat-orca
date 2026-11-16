@@ -20,11 +20,11 @@ review.
    ```
 
 2. Ensure the sibling `bpi_playwright_handoff_repo` is present and the OCR
-   dependencies/model runtime are installed in its Python 3.12 environment. The
+   dependencies/model runtime are installed in its Python 3.11.9 environment. The
    default expected interpreter is:
 
    ```text
-   ..\bpi_playwright_handoff_repo\.venv-py312\Scripts\python.exe
+   ..\bpi_playwright_handoff_repo\.venv-py311\Scripts\python.exe
    ```
 
    See the extraction project's README for installing the pinned OCR dependencies
@@ -37,7 +37,7 @@ review.
    $env:CLAIM_OCR_PYTHON = "C:\path\to\python.exe"
    ```
 
-   `CLAIM_OCR_PYTHON` is optional if the standard `.venv-py312` interpreter is
+   `CLAIM_OCR_PYTHON` is optional if the standard `.venv-py311` interpreter is
    available under the configured extraction root.
 
 ## Run from the terminal
@@ -97,6 +97,41 @@ If `CLAIM_OCR_OUTPUT_PATH` is unset, the test writes `<document-name>.json` besi
 image or PDF. The legacy `CLAIM_OCR_IMAGE_PATH` setting is still accepted. Without
 either input variable, the spec is reported as skipped so normal test runs do not
 require a personal document.
+
+## Validate exports from the Colab BPI notebook
+
+The Colab notebook's final cell downloads `orca_extracted_claim_data.zip`, containing
+`all_extracted_metadata.json`, `pet_wise_line_items.json`, and
+`human_review_required.json`. Extract that ZIP locally, then run the separate export
+validation test:
+
+```powershell
+$env:ORCA_BPI_EXPORT_DIR = "C:\path\to\extracted\orca_extracted_claim_data"
+npx playwright test tests/orca/claims/colab-notebook-export.spec.ts --project=main-tests
+```
+
+This test validates the notebook's exported JSON contracts locally. It does not
+execute the Colab notebook, run OCR, or invoke `ClaimOcrService`. Without
+`ORCA_BPI_EXPORT_DIR`, it is skipped.
+
+## Run the notebook extraction locally on CPU
+
+The claim download test now continues directly into the repository notebook's
+extraction cells. After downloading the PDF, it substitutes local file input/output
+for Colab upload/download, uses PaddleOCR-VL on CPU, disables the optional Qwen GPU
+worker, and verifies the notebook exports. Run it with:
+
+```powershell
+npx playwright test tests/orca/claims/single-claim.spec.ts --project=main-tests
+```
+
+The runner uses `.venv-py311` by default, honors `CLAIM_OCR_PYTHON` and
+`CLAIM_OCR_PROJECT_ROOT`, and writes each run under
+`notebook-cpu-runs\<document-name>-<timestamp>` beside the input. CPU OCR can take
+substantially longer than GPU inference; the test timeout is 60 minutes. To rerun
+the CPU pipeline on an attachment that is already downloaded, set
+`ORCA_BPI_DOCUMENT_PATH` and run `notebook-cpu-extraction.spec.ts`. The original
+Colab notebook is not modified.
 
 ## Integration flow
 
@@ -185,9 +220,12 @@ steps.
 - **Document not found / unsupported extension** — check the full path and use a
   supported image extension or PDF.
 - **Could not start Python** — verify `CLAIM_OCR_PYTHON`, or install the expected
-  Python 3.12 extraction environment.
+  Python 3.11.9 extraction environment.
 - **Python OCR process failed** — inspect the error printed by the command; confirm
   the extraction dependencies and Paddle runtime were installed in that interpreter.
+  If the underlying import error says Windows Application Control blocked a compiled
+  extension, ask the administrator to approve it or provide an authorized runtime;
+  reinstalling the OCR requirements does not override that policy.
 - **Output file missing or invalid** — ensure the destination directory is writable;
   the service fails rather than treating a missing/invalid JSON file as success.
 - **No/partial fields extracted** — inspect the source image and JSON warnings.
